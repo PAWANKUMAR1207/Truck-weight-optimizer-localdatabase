@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Truck Utilization Calculator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center p-6">
+  <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Truck Utilization Calculator</h1>
+
+  <!-- Navigation Tabs -->
+  <div class="w-full max-w-6xl mb-6">
+    <div class="flex flex-wrap border-b border-gray-200">
+      <button onclick="showTab('calculator')" id="calculator-tab" class="tab-button bg-blue-500 text-white px-4 py-2 rounded-t-lg mr-2">
+        🚚 Calculator
+      </button>
+      <button onclick="showTab('analytics')" id="analytics-tab" class="tab-button bg-gray-300 text-gray-700 px-4 py-2 rounded-t-lg mr-2">
+        📊 Analytics
+      </button>
+      <button onclick="showTab('history')" id="history-tab" class="tab-button bg-gray-300 text-gray-700 px-4 py-2 rounded-t-lg">
+        📋 History
+      </button>
+    </div>
+  </div>
+
+  <!-- Calculator Tab -->
+  <div id="calculator-content" class="tab-content w-full max-w-6xl">
+    <!-- Instructions -->
+    <div class="w-full mb-4">
+      <button id="toggle-instructions" class="bg-yellow-400 text-black font-semibold px-4 py-2 rounded hover:bg-yellow-500 mb-2">
+        📘 Show Instructions
+      </button>
+      <div id="instructions-content" class="bg-yellow-100 rounded p-4 hidden">
+        <ul class="list-disc list-inside text-sm text-gray-700">
+          <li>Enter SKU details: Name, Quantity, Volume, Weight, and Destination.</li>
+          <li>Select a truck type or choose "Custom Truck" to input dimensions.</li>
+          <li>Click "Calculate Utilization" to view results and chart.</li>
+          <li>Use "Download Summary" to save results as CSV.</li>
+          <li>All calculations are automatically saved to database for analytics.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Form -->
+    <form id="sku-form" class="bg-white p-6 rounded-lg shadow w-full space-y-4">
+      <div id="sku-inputs" class="space-y-3">
+        <div class="flex flex-wrap gap-2 sku-row">
+          <input type="text" placeholder="SKU Name" required class="flex-1 border rounded px-3 py-2" />
+          <input type="number" placeholder="Quantity" required class="flex-1 border rounded px-3 py-2" />
+          <input type="number" placeholder="Volume (m³)" step="0.01" required class="flex-1 border rounded px-3 py-2" />
+          <input type="number" placeholder="Weight (kg)" step="0.01" required class="flex-1 border rounded px-3 py-2" />
+          <input type="text" placeholder="Destination" required class="flex-1 border rounded px-3 py-2" />
+        </div>
+      </div>
+
+      <button type="button" onclick="addRow()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Add Another SKU</button>
+
+      <div>
+        <label for="truck" class="block font-medium">Select Truck Type:</label>
+        <select id="truck" required class="w-full mt-1 border rounded px-3 py-2">
+          <option value="small">Small Truck (15m³ / 3000kg)</option>
+          <option value="medium">Medium Truck (30m³ / 7000kg)</option>
+          <option value="large">Large Truck (45m³ / 12000kg)</option>
+          <option value="custom">Custom Truck</option>
+        </select>
+      </div>
+
+      <div id="custom-dimensions" class="hidden gap-2 mt-2 flex flex-wrap">
+        <input type="number" id="custom-volume" placeholder="Truck Volume (m³)" step="0.1" class="flex-1 border rounded px-3 py-2" />
+        <input type="number" id="custom-weight" placeholder="Truck Weight (kg)" step="0.1" class="flex-1 border rounded px-3 py-2" />
+      </div>
+
+      <div class="flex flex-wrap gap-3">
+        <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Calculate Utilization</button>
+        <button type="button" onclick="location.reload()" class="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400">Reset Form</button>
+      </div>
+    </form>
+
+    <!-- Result Section -->
+    <div id="result" class="w-full mt-6 text-sm"></div>
+    <canvas id="util-chart" width="400" height="200" class="mt-4 w-full hidden"></canvas>
+    <button id="download-btn" class="hidden mt-3 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Download Summary</button>
+  </div>
+
+  <!-- Analytics Tab -->
+  <div id="analytics-content" class="tab-content w-full max-w-6xl hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Utilization Trends Chart -->
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h3 class="text-lg font-bold mb-4">📈 Utilization Trends (Last 30 Days)</h3>
+        <canvas id="trends-chart" width="400" height="200"></canvas>
+      </div>
+
+      <!-- Destination Statistics Chart -->
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h3 class="text-lg font-bold mb-4">🎯 Top Destinations by Usage</h3>
+        <canvas id="destination-chart" width="400" height="200"></canvas>
+      </div>
+
+      <!-- Truck Type Usage Chart -->
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h3 class="text-lg font-bold mb-4">🚛 Truck Type Usage</h3>
+        <canvas id="truck-type-chart" width="400" height="200"></canvas>
+      </div>
+
+      <!-- Key Metrics -->
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h3 class="text-lg font-bold mb-4">📊 Key Metrics</h3>
+        <div id="key-metrics" class="space-y-2">
+          <div class="flex justify-between">
+            <span>Loading metrics...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Tab -->
+  <div id="history-content" class="tab-content w-full max-w-6xl hidden">
+    <div class="bg-white rounded-lg shadow">
+      <div class="p-6 border-b">
+        <h3 class="text-lg font-bold">📋 Calculation History</h3>
+        <p class="text-sm text-gray-600">Recent truck utilization calculations</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Truck Type</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Destinations</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Volume Util</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Weight Util</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body" class="divide-y divide-gray-200">
+            <tr>
+              <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading history...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function getEfficiencyLabel(value) {
+      if (value >= 90) return '<span class="text-green-600 font-bold">Excellent</span>';
+      if (value >= 75) return '<span class="text-yellow-600 font-bold">Good</span>';
+      if (value >= 50) return '<span class="text-orange-500 font-bold">Moderate</span>';
+      return '<span class="text-red-600 font-bold">Poor</span>';
+    }
+
+    let skus = [], results = [], chartInstance = null;
+    let trendsChart = null, destinationChart = null, truckTypeChart = null;
+    let currentTab = 'calculator';
+
+    // Tab management
+    function showTab(tabName) {
+      // Hide all tab contents
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+      });
+      
+      // Remove active styles from all tabs
+      document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('bg-blue-500', 'text-white');
+        button.classList.add('bg-gray-300', 'text-gray-700');
+      });
+      
+      // Show selected tab content
+      document.getElementById(tabName + '-content').classList.remove('hidden');
+      
+      // Add active styles to selected tab
+      document.getElementById(tabName + '-tab').classList.remove('bg-gray-300', 'text-gray-700');
+      document.getElementById(tabName + '-tab').classList.add('bg-blue-500', 'text-white');
+      
+      currentTab = tabName;
+      
+      // Load data for analytics and history tabs
+      if (tabName === 'analytics') {
+        loadAnalytics();
+      } else if (tabName === 'history') {
+        loadHistory();
+      }
+    }
+
+    // Load analytics data
+    async function loadAnalytics() {
+      try {
+        // Load utilization trends
+        const trendsResponse = await fetch('/api/trends');
+        const trendsData = await trendsResponse.json();
+        renderTrendsChart(trendsData);
+
+        // Load destination stats
+        const destResponse = await fetch('/api/destination-stats');
+        const destData = await destResponse.json();
+        renderDestinationChart(destData);
+
+        // Load truck type stats
+        const truckResponse = await fetch('/api/truck-stats');
+        const truckData = await truckResponse.json();
+        renderTruckTypeChart(truckData);
+
+        // Update key metrics
+        updateKeyMetrics(destData, truckData);
+      } catch (error) {
+        console.error('Error loading analytics:', error);
+      }
+    }
+
+    // Render trends chart
+    function renderTrendsChart(data) {
+      const ctx = document.getElementById('trends-chart').getContext('2d');
+      
+      if (trendsChart) {
+        trendsChart.destroy();
+      }
+      
+      trendsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.map(d => new Date(d.date).toLocaleDateString()),
+          datasets: [
+            {
+              label: 'Avg Volume Utilization (%)',
+              data: data.map(d => d.avg_volume_util),
+              borderColor: 'rgba(59, 130, 246, 1)',
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              tension: 0.4
+            },
+            {
+              label: 'Avg Weight Utilization (%)',
+              data: data.map(d => d.avg_weight_util),
+              borderColor: 'rgba(16, 185, 129, 1)',
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              tension: 0.4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100
+            }
+          }
+        }
+      });
+    }
+
+    // Render destination chart
+    function renderDestinationChart(data) {
+      const ctx = document.getElementById('destination-chart').getContext('2d');
+      
+      if (destinationChart) {
+        destinationChart.destroy();
+      }
+      
+      const topDestinations = data.slice(0, 5);
+      
+      destinationChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: topDestinations.map(d => d.destination),
+          datasets: [
+            {
+              label: 'Calculation Count',
+              data: topDestinations.map(d => d.calculation_count),
+              backgroundColor: 'rgba(139, 69, 19, 0.6)'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    // Render truck type chart
+    function renderTruckTypeChart(data) {
+      const ctx = document.getElementById('truck-type-chart').getContext('2d');
+      
+      if (truckTypeChart) {
+        truckTypeChart.destroy();
+      }
+      
+      truckTypeChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: data.map(d => d.truck_type.charAt(0).toUpperCase() + d.truck_type.slice(1)),
+          datasets: [
+            {
+              data: data.map(d => d.usage_count),
+              backgroundColor: [
+                'rgba(59, 130, 246, 0.8)',
+                'rgba(16, 185, 129, 0.8)',
+                'rgba(245, 158, 11, 0.8)',
+                'rgba(239, 68, 68, 0.8)'
+              ]
+            }
+          ]
+        },
+        options: {
+          responsive: true
+        }
+      });
+    }
+
+    // Update key metrics
+    function updateKeyMetrics(destData, truckData) {
+      const totalCalculations = destData.reduce((sum, d) => sum + d.calculation_count, 0);
+      const totalDestinations = destData.length;
+      const avgVolumeUtil = destData.reduce((sum, d) => sum + d.avg_volume_util, 0) / destData.length;
+      const avgWeightUtil = destData.reduce((sum, d) => sum + d.avg_weight_util, 0) / destData.length;
+      
+      document.getElementById('key-metrics').innerHTML = `
+        <div class="flex justify-between">
+          <span>Total Calculations:</span>
+          <span class="font-bold">${totalCalculations}</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Unique Destinations:</span>
+          <span class="font-bold">${totalDestinations}</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Avg Volume Utilization:</span>
+          <span class="font-bold">${avgVolumeUtil ? avgVolumeUtil.toFixed(1) : '0'}%</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Avg Weight Utilization:</span>
+          <span class="font-bold">${avgWeightUtil ? avgWeightUtil.toFixed(1) : '0'}%</span>
+        </div>
+      `;
+    }
+
+    // Load history data
+    async function loadHistory() {
+      try {
+        const response = await fetch('/api/history');
+        const data = await response.json();
+        
+        const tableBody = document.getElementById('history-table-body');
+        
+        if (data.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No calculation history found</td></tr>';
+          return;
+        }
+        
+        tableBody.innerHTML = data.map(calc => `
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              ${new Date(calc.timestamp).toLocaleDateString()}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              ${calc.truck_type.charAt(0).toUpperCase() + calc.truck_type.slice(1)}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              ${calc.total_destinations}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              ${calc.avg_volume_util ? calc.avg_volume_util.toFixed(1) : '0'}%
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              ${calc.avg_weight_util ? calc.avg_weight_util.toFixed(1) : '0'}%
+            </td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading history:', error);
+        document.getElementById('history-table-body').innerHTML = 
+          '<tr><td colspan="5" class="px-6 py-4 text-center text-red-500">Error loading history</td></tr>';
+      }
+    }
+
+    // Original calculator functionality
+    document.getElementById('truck').addEventListener('change', function () {
+      document.getElementById('custom-dimensions').classList.toggle('hidden', this.value !== 'custom');
+    });
+
+    document.getElementById('toggle-instructions').addEventListener('click', () => {
+      document.getElementById('instructions-content').classList.toggle('hidden');
+    });
+
+    function addRow() {
+      const div = document.createElement('div');
+      div.className = 'flex flex-wrap gap-2 sku-row';
+      div.innerHTML = `
+        <input type="text" placeholder="SKU Name" required class="flex-1 border rounded px-3 py-2" />
+        <input type="number" placeholder="Quantity" required class="flex-1 border rounded px-3 py-2" />
+        <input type="number" placeholder="Volume (m³)" step="0.01" required class="flex-1 border rounded px-3 py-2" />
+        <input type="number" placeholder="Weight (kg)" step="0.01" required class="flex-1 border rounded px-3 py-2" />
+        <input type="text" placeholder="Destination" required class="flex-1 border rounded px-3 py-2" />
+      `;
+      document.getElementById('sku-inputs').appendChild(div);
+    }
+
+    document.getElementById('sku-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const rows = document.querySelectorAll('.sku-row');
+      skus = Array.from(rows).map(row => {
+        const inputs = row.querySelectorAll('input');
+        return {
+          name: inputs[0].value,
+          qty: parseInt(inputs[1].value),
+          volume: parseFloat(inputs[2].value),
+          weight: parseFloat(inputs[3].value),
+          destination: inputs[4].value || 'Unknown'
+        };
+      });
+
+      const truckType = document.getElementById('truck').value;
+      const payload = {
+        skus,
+        truckType,
+        ...(truckType === 'custom' && {
+          customVolume: parseFloat(document.getElementById('custom-volume').value),
+          customWeight: parseFloat(document.getElementById('custom-weight').value),
+        })
+      };
+
+      const res = await fetch('/api/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      results = await res.json();
+
+      const chartLabels = [], chartVolume = [], chartWeight = [];
+
+      const resultHtml = results.map(group => {
+        chartLabels.push(group.destination);
+        chartVolume.push(parseFloat(group.volumeUtil));
+        chartWeight.push(parseFloat(group.weightUtil));
+
+        const volRating = getEfficiencyLabel(group.volumeUtil);
+        const wtRating = getEfficiencyLabel(group.weightUtil);
+
+        return `
+          <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded mb-6">
+            <h2 class="text-lg font-bold mb-2">Result - ${group.destination}</h2>
+            <p>Trucks Required: <strong>${group.trucksRequired}</strong></p>
+            <p>Volume Utilization: ${group.volumeUtil}% (${volRating})</p>
+            <p>Weight Utilization: ${group.weightUtil}% (${wtRating})</p>
+          </div>`;
+      }).join('');
+
+      document.getElementById('result').innerHTML = resultHtml;
+      document.getElementById('download-btn').classList.remove('hidden');
+
+      // ✅ Destroy old chart instance if present
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      document.getElementById('util-chart').classList.remove('hidden');
+      chartInstance = new Chart(document.getElementById('util-chart'), {
+        type: 'bar',
+        data: {
+          labels: chartLabels,
+          datasets: [
+            {
+              label: 'Volume Utilization (%)',
+              data: chartVolume,
+              backgroundColor: 'rgba(59, 130, 246, 0.6)'
+            },
+            {
+              label: 'Weight Utilization (%)',
+              data: chartWeight,
+              backgroundColor: 'rgba(16, 185, 129, 0.6)'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100
+            }
+          }
+        }
+      });
+    });
+
+    document.getElementById('download-btn').addEventListener('click', () => {
+      let csv = "Destination,Trucks Required,Volume Utilization (%),Weight Utilization (%)\n";
+      results.forEach(res => {
+        csv += `${res.destination},${res.trucksRequired},${res.volumeUtil},${res.weightUtil}\n`;
+      });
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "truck_utilization_summary.csv";
+      a.click();
+    });
+  </script>
+</body>
+</html>
